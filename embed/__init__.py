@@ -1,0 +1,1 @@
+# Embed package for LaViDa embedding models 

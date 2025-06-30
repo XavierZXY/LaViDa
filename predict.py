@@ -26,6 +26,17 @@ from llava.model.language_model.llada.log_likelyhood import (
     get_logits as llada_get_logits,
 )
 
+import debugpy
+
+try:
+    # 5678 is the default attach port in the VS Code debug configurations. Unless a host and port are specified, host defaults to 127.0.0.1
+    debugpy.listen(("localhost", 9504))
+    print("Waiting for debugger attach")
+    debugpy.wait_for_client()
+except Exception as e:
+    pass
+
+
 pretrained = "jacklishufan/lavida-llada-v1.0-instruct"
 model_name = "llava_llada"
 device = "cuda"
