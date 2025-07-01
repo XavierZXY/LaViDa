@@ -95,7 +95,9 @@ class LaViDaEmbedModel(nn.Module):
         for t in text:
             # Use conversation template following embed_example.py
             conv = copy.deepcopy(conv_templates["llada"])
-            conv.append_message(conv.roles[0], t)
+            conv.append_message(
+                conv.roles[0], t + " conclusion this in one sentence."
+            )
             conv.append_message(conv.roles[1], None)
             prompt = conv.get_prompt()
 
@@ -123,8 +125,8 @@ class LaViDaEmbedModel(nn.Module):
                     embedd_flag=True,
                     do_sample=False,
                     temperature=0,
-                    max_new_tokens=1,  # Just get the last hidden state
-                    block_length=1,
+                    max_new_tokens=8,  # Just get the last hidden state
+                    block_length=8,
                     step_ratio=1.0,
                     tokenizer=self.tokenizer,
                     prefix_lm=True,
@@ -135,7 +137,8 @@ class LaViDaEmbedModel(nn.Module):
 
             # log.info(f"last_hidden shape: {hidden_states.shape}")
 
-            embedding = self._mean_pool(hidden_states[:, 44:-7])
+            # embedding = self._mean_pool(hidden_states[:, 44:-7])
+            embedding = self._mean_pool(hidden_states)
             embeddings.append(embedding)
 
         if len(embeddings) == 1:
@@ -162,7 +165,9 @@ class LaViDaEmbedModel(nn.Module):
 
             # Use conversation template with image token
             conv = copy.deepcopy(conv_templates["llada"])
-            question = DEFAULT_IMAGE_TOKEN + "\nDescribe the image in detail."
+            question = (
+                DEFAULT_IMAGE_TOKEN + "\nDescribe the image in one sentence."
+            )
             conv.append_message(conv.roles[0], question)
             conv.append_message(conv.roles[1], None)
             prompt_question = conv.get_prompt()
@@ -192,14 +197,15 @@ class LaViDaEmbedModel(nn.Module):
                     image_sizes=image_sizes,
                     do_sample=False,
                     temperature=0,
-                    max_new_tokens=64,  # Just get the last hidden state
-                    block_length=64,
+                    max_new_tokens=8,  # Just get the last hidden state
+                    block_length=8,
                     step_ratio=1.0,
                     tokenizer=self.tokenizer,
                     prefix_lm=True,
                     verbose=False,
                 )
                 last_hidden = hidden_states[:, 42:-7]
+                last_hidden = hidden_states
 
             embedding = self._mean_pool(last_hidden)
             embeddings.append(embedding)

@@ -406,14 +406,7 @@ def generate_embed(
         remasking: Remasking strategy. 'low_confidence' or 'random'.
         mask_id: The toke id of [MASK] is 126336.
     """
-    # breakpoint()
-    # remasking =
-    # step_ratio = 0.5
-    # block_length = 1024
-    # steps = 1024
-    steps = max_new_tokens  # min(steps,max_new_tokens)
-    # if step_ratio:
-    #     steps = int(max_new_tokens*step_ratio)
+    steps = max_new_tokens
     gen_length = max_new_tokens
     assert position_ids is None
     if prompt is None:
@@ -427,19 +420,12 @@ def generate_embed(
         past_key_values = model(
             None, input_embeddings=inputs_embeds, use_cache=True
         ).attn_key_values
-        hidden_states = model(
-            None,
-            input_embeddings=inputs_embeds,
-            output_hidden_states=True,
-        ).hidden_states[-1]
-        # log.info(f"hidden_states shape: {hidden_states.shape}")
-        return hidden_states
-        # breakpoint()
-        x = torch.full((bsz, gen_length), mask_id, dtype=torch.long).to(
-            model.device
-        )
-        prompt = torch.full((bsz, 0), 0, dtype=torch.long).to(model.device)
-        # x[:, :prompt.shape[1]] = prompt.clone()
+        x = torch.full(
+            (inputs_embeds.shape[0], gen_length), mask_id, dtype=torch.long
+        ).to(model.device)
+        prompt = torch.full(
+            (inputs_embeds.shape[0], 0), 0, dtype=torch.long
+        ).to(model.device)
     else:
         x = torch.full(
             (1, prompt.shape[1] + gen_length), mask_id, dtype=torch.long
@@ -447,15 +433,12 @@ def generate_embed(
         x[:, : prompt.shape[1]] = prompt.clone()
 
     prompt_index = x != mask_id
-    # assert prompt.shape[0] == 1
     if draft_tokens is not None:
         assert draft_tokens.shape[1] <= gen_length
         x[:, prompt.shape[1] : prompt.shape[1] + draft_tokens.shape[1]] = (
             draft_tokens.clone()
         )
 
-    # if block_length < gen_length:
-    #    block_length = gen_length
     assert gen_length % block_length == 0
     num_blocks = gen_length // block_length
 
@@ -466,17 +449,9 @@ def generate_embed(
         assert step_ratio is None, (
             "Please do not pass both step_ratio and step_per_block"
         )
-    # step_ratio = 0.5
-    # schedule = 'shift'
-    # schedule_kwargs = dict(shift=3)
-    # breakpoint()
     if step_ratio:
         steps = int(steps * step_ratio)
 
-    # print(steps,step_per_block,block_length,draft_tokens.shape[-1])
-    # NFE = 0
-    if verbose:
-        history = []
     for num_block in range(num_blocks):
         block_mask_index = (
             x[
@@ -492,29 +467,20 @@ def generate_embed(
             schedule=schedule,
             schedule_kwargs=schedule_kwargs,
         )
-        if DEBUG_PRINT_OUTPUT:
-            print(
-                f"Block: {num_block + 1}/{num_blocks}, Steps per Block: {steps}, Block Length: {block_length}"
-            )
-            print(f"Tokens generated per step {num_transfer_tokens[0]}")
         for i in range(steps):
-            # print(i)
             mask_index = x == mask_id
             block_mask_index = mask_index[
                 :,
                 prompt.shape[1] + num_block * block_length : prompt.shape[1]
                 + (num_block + 1) * block_length :,
             ]
-            # print(mask_index.sum())
             if block_mask_index.sum() == 0:
                 continue
-            # NFE += 2
             if cfg_scale > 0.0:
                 assert NotImplementedError("cfg_scale > 0. is not supported.")
                 un_x = x.clone()
                 un_x[prompt_index] = mask_id
                 x_ = torch.cat([x, un_x], dim=0)
-                #
                 logits = model(
                     x_, input_embeds_inference=[inputs_embeds, None]
                 ).logits
@@ -522,58 +488,29 @@ def generate_embed(
                 logits = un_logits + (cfg_scale + 1) * (logits - un_logits)
             else:
                 inputs_embeds_curr = model.transformer.wte(x)
-                log.info(f"x: \n {x}")
-                log.info(
-                    f"inputs_embeds_curr shape: {inputs_embeds_curr.shape}"
-                )
-                # print(tokenizer.batch_decode(x)[0].replace('<|endoftext|>',''))
-                # print((x==mask_id).sum())
-                # breakpoint()
                 if prefix_lm:
-                    # breakpoint()
                     logits = model(
                         None,
                         input_embeddings=inputs_embeds_curr,
                         past_key_values=past_key_values,
                     ).logits
-                    if i == steps - 1:
-                        hidden_states = model(
-                            None,
-                            input_embeddings=inputs_embeds_curr,
-                            output_hidden_states=True,
-                        ).hidden_states
-                        return hidden_states
-
                 else:
                     if inputs_embeds is not None:
                         inputs_embeds_curr[:, : inputs_embeds.shape[1]] = (
                             inputs_embeds
                         )
-                    print(
-                        "Falg --------------------------------------------------------"
-                    )
                     logits = model(
                         None, input_embeddings=inputs_embeds_curr
                     ).logits
-                    hidden_states = model(
-                        None,
-                        input_embeddings=inputs_embeds_curr,
-                        output_hidden_states=True,
-                    ).hidden_states
-                    print(f"Hidden states shape: {hidden_states[-1].shape}")
-
-            # logits = logits.cpu()
             logits_with_noise = add_gumbel_noise(
                 logits, temperature=temperature
             )
-            x0 = torch.argmax(logits_with_noise, dim=-1)  # b, l
-            # torch.cuda.empty_cache()
-            # torch.cuda.synchronize()
+            x0 = torch.argmax(logits_with_noise, dim=-1)
             if remasking == "low_confidence":
                 p = F.softmax(logits.to(torch.float64), dim=-1)
                 x0_p = torch.squeeze(
                     torch.gather(p, dim=-1, index=torch.unsqueeze(x0, -1)), -1
-                )  # b, l
+                )
             elif remasking == "random":
                 x0_p = torch.rand((x0.shape[0], x0.shape[1]), device=x0.device)
             elif remasking == "entrophy":
@@ -582,7 +519,6 @@ def generate_embed(
                 log_probs = torch.log(probs + epsilon)
                 x0_p = torch.sum(probs * log_probs, dim=-1)
             elif remasking == "margin":
-                ## similar to margin algo in Dream
                 p = F.softmax(logits.to(torch.float64), dim=-1)
                 sorted_probs, _ = torch.sort(p, dim=-1, descending=True)
                 top1_probs = sorted_probs[:, :, 0]
@@ -610,13 +546,20 @@ def generate_embed(
                     breakpoint()
                 transfer_index[j, select_index] = True
             x[transfer_index] = x0[transfer_index]
-            if verbose:
-                history.append(x.clone().cpu())
-    # breakpoint()
-    # print(f"NFE: {NFE} Num Blocks: {num_blocks}")
-    if verbose:
-        return x, history
-    return x
+
+    # 采样循环结束后，用最终的x再过一遍模型，取hidden_states并返回
+    # log.info(
+    #     f"*********************** x ********************************: \n {x}"
+    # )
+    inputs_embeds_final = model.transformer.wte(x)
+    # log.info(f" inputs_embeds_final shape: {inputs_embeds_final.shape}")
+    return inputs_embeds_final
+    hidden_states = model(
+        None,
+        input_embeddings=inputs_embeds_final,
+        output_hidden_states=True,
+    ).hidden_states
+    return hidden_states[-1]
 
 
 def main():
