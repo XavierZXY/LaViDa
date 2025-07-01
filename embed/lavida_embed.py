@@ -113,7 +113,7 @@ class LaViDaEmbedModel(nn.Module):
                 .to(self.device)
             )
 
-            log.info(f"input_ids shape: {input_ids.shape}")
+            # log.info(f"input_ids shape: {input_ids.shape}")
             # log.info(f"input_ids: {input_ids}")
 
             # Use model.generate() following embed_example.py approach
@@ -133,7 +133,7 @@ class LaViDaEmbedModel(nn.Module):
                 # Get the last hidden state
                 # last_hidden = hidden_states[-1]
 
-            log.info(f"last_hidden shape: {hidden_states.shape}")
+            # log.info(f"last_hidden shape: {hidden_states.shape}")
 
             embedding = self._mean_pool(hidden_states[:, 44:-7])
             embeddings.append(embedding)
@@ -167,7 +167,7 @@ class LaViDaEmbedModel(nn.Module):
             conv.append_message(conv.roles[1], None)
             prompt_question = conv.get_prompt()
 
-            log.info(f"Image prompt: {prompt_question}")
+            # log.info(f"Image prompt: {prompt_question}")
 
             # Tokenize following embed_example.py
             input_ids = (

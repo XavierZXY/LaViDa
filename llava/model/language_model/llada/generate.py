@@ -432,7 +432,7 @@ def generate_embed(
             input_embeddings=inputs_embeds,
             output_hidden_states=True,
         ).hidden_states[-1]
-        log.info(f"hidden_states shape: {hidden_states.shape}")
+        # log.info(f"hidden_states shape: {hidden_states.shape}")
         return hidden_states
         # breakpoint()
         x = torch.full((bsz, gen_length), mask_id, dtype=torch.long).to(
