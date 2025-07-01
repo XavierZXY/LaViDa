@@ -1,15 +1,16 @@
+import copy
+import logging
+from typing import List, Optional, Union
+
 import torch
 import torch.nn as nn
-from typing import Union, List, Optional
-import logging
-from rich.logging import RichHandler
-import copy
 from PIL import Image
+from rich.logging import RichHandler
 
-from llava.model.builder import load_pretrained_model
-from llava.mm_utils import process_images, tokenizer_image_token
-from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN
+from llava.constants import DEFAULT_IMAGE_TOKEN, IMAGE_TOKEN_INDEX
 from llava.conversation import conv_templates
+from llava.mm_utils import process_images, tokenizer_image_token
+from llava.model.builder import load_pretrained_model
 from llava.model.language_model.llada.generate import generate as llada_generate
 
 # Configure rich logging
@@ -95,7 +96,9 @@ class LaViDaEmbedModel(nn.Module):
         for t in text:
             # Use conversation template following embed_example.py
             conv = copy.deepcopy(conv_templates["llada"])
-            conv.append_message(conv.roles[0], t)
+            conv.append_message(
+                conv.roles[0], t + " conclusion this in one sentence."
+            )
             conv.append_message(conv.roles[1], None)
             prompt = conv.get_prompt()
 
@@ -162,7 +165,9 @@ class LaViDaEmbedModel(nn.Module):
 
             # Use conversation template with image token
             conv = copy.deepcopy(conv_templates["llada"])
-            question = DEFAULT_IMAGE_TOKEN + "\nDescribe the image in detail."
+            question = (
+                DEFAULT_IMAGE_TOKEN + "\nDescribe the image in one sentence."
+            )
             conv.append_message(conv.roles[0], question)
             conv.append_message(conv.roles[1], None)
             prompt_question = conv.get_prompt()
