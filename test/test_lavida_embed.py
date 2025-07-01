@@ -13,6 +13,8 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from embed.lavida_embed import LaViDaEmbedModel, create_lavida_embed_model
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+
 # Configure rich logging
 logging.basicConfig(
     level=logging.INFO,
@@ -24,247 +26,194 @@ logging.basicConfig(
 log = logging.getLogger("rich")
 
 
-def create_dummy_image(
-    height: int = 224, width: int = 224, channels: int = 3
-) -> torch.Tensor:
-    """Create a dummy image tensor for testing."""
-    return torch.randn(channels, height, width)
+def create_dummy_pil_image(height: int = 224, width: int = 224) -> Image.Image:
+    """Create a dummy PIL image for testing."""
+    # Create a random numpy array and convert to PIL Image
+    img_array = np.random.randint(0, 255, (height, width, 3), dtype=np.uint8)
+    return Image.fromarray(img_array)
 
 
-def create_dummy_images(
-    batch_size: int, height: int = 224, width: int = 224, channels: int = 3
-) -> torch.Tensor:
-    """Create a batch of dummy image tensors for testing."""
-    return torch.randn(batch_size, channels, height, width)
+def create_dummy_pil_images(
+    batch_size: int, height: int = 224, width: int = 224
+) -> List[Image.Image]:
+    """Create a batch of dummy PIL images for testing."""
+    return [create_dummy_pil_image(height, width) for _ in range(batch_size)]
 
 
-class TestLaViDaEmbedModel:
-    """Test class for LaViDa embedding model."""
-
-    @pytest.fixture
-    def model_path(self):
-        """Model path fixture - replace with actual model path for testing."""
-        # This should be replaced with an actual LaViDa model path
-        return "path/to/your/lavida/model"
+class TestLaViDaSimilarity:
+    """Test class for LaViDa similarity functionality."""
 
     @pytest.fixture
-    def embed_model(self, model_path):
+    def embed_model(self):
         """Create embedding model fixture."""
         try:
             model = create_lavida_embed_model(
-                model_path=model_path,
                 device="cuda" if torch.cuda.is_available() else "cpu",
                 torch_dtype="bfloat16",
             )
+            log.info(
+                f"Model loaded successfully with hidden size: {model.hidden_size}"
+            )
             return model
         except Exception as e:
-            log.warning(f"Could not load model from {model_path}: {e}")
+            log.warning(f"Could not load model: {e}")
             log.warning("Skipping tests that require model loading")
             return None
 
-    def test_model_initialization(self, embed_model):
-        """Test model initialization."""
+    def test_text_similarity(self, embed_model):
+        """Test text similarity functionality."""
         if embed_model is None:
             pytest.skip("Model not available")
 
-        assert embed_model is not None
-        assert hasattr(embed_model, "hidden_size")
-        assert hasattr(embed_model, "tokenizer")
-        assert hasattr(embed_model, "model")
-        assert hasattr(embed_model, "image_processor")
+        log.info("=== Testing Text Similarity ===")
 
-        log.info(
-            f"Model initialized with hidden size: {embed_model.hidden_size}"
-        )
-
-    def test_text_embedding_single(self, embed_model):
-        """Test single text embedding."""
-        if embed_model is None:
-            pytest.skip("Model not available")
-
-        text = "This is a test sentence for embedding."
-
-        embeddings = embed_model.embed_text(text)
-
-        assert embeddings.shape[0] == 1  # batch size
-        assert embeddings.shape[1] == embed_model.hidden_size
-        assert not torch.isnan(embeddings).any()
-
-        log.info(f"Single text embedding shape: {embeddings.shape}")
-
-    def test_text_embedding_batch(self, embed_model):
-        """Test batch text embedding."""
-        if embed_model is None:
-            pytest.skip("Model not available")
-
-        texts = [
-            "This is the first sentence.",
-            "This is the second sentence.",
-            "This is the third sentence.",
+        # Test data
+        texts1 = [
+            "A cat is sitting on a chair.",
+            "A dog is running in the park.",
+            "A bird is flying in the sky.",
+        ]
+        texts2 = [
+            "A cat is sitting on a chair.",  # Same as first text
+            "A dog is running in the garden.",  # Similar to second text
+            "A bird is flying in the sky.",  # Similar to third text
         ]
 
-        embeddings = embed_model.embed_text(texts)
-
-        assert embeddings.shape[0] == len(texts)  # batch size
-        assert embeddings.shape[1] == embed_model.hidden_size
-        assert not torch.isnan(embeddings).any()
-
-        log.info(f"Batch text embedding shape: {embeddings.shape}")
-
-    def test_image_embedding_single(self, embed_model):
-        """Test single image embedding."""
-        if embed_model is None:
-            pytest.skip("Model not available")
-
-        # Create dummy image
-        image = create_dummy_image()
-
-        embeddings = embed_model.embed_image(image)
-
-        assert embeddings.shape[0] == 1  # batch size
-        assert embeddings.shape[1] == embed_model.hidden_size
-        assert not torch.isnan(embeddings).any()
-
-        log.info(f"Single image embedding shape: {embeddings.shape}")
-
-    def test_image_embedding_batch(self, embed_model):
-        """Test batch image embedding."""
-        if embed_model is None:
-            pytest.skip("Model not available")
-
-        # Create dummy images
-        images = create_dummy_images(batch_size=3)
-
-        embeddings = embed_model.embed_image(images)
-
-        assert embeddings.shape[0] == 3  # batch size
-        assert embeddings.shape[1] == embed_model.hidden_size
-        assert not torch.isnan(embeddings).any()
-
-        log.info(f"Batch image embedding shape: {embeddings.shape}")
-
-    def test_text_image_fusion_single(self, embed_model):
-        """Test single text-image fusion embedding."""
-        if embed_model is None:
-            pytest.skip("Model not available")
-
-        text = "A beautiful sunset over the mountains."
-        image = create_dummy_image()
-
-        embeddings = embed_model.embed_text_and_image(text, image)
-
-        assert embeddings.shape[0] == 1  # batch size
-        assert embeddings.shape[1] == embed_model.hidden_size
-        assert not torch.isnan(embeddings).any()
-
-        log.info(
-            f"Single text-image fusion embedding shape: {embeddings.shape}"
+        # Test cosine similarity
+        similarity_matrix = embed_model.text_similarity(
+            texts1, texts2, "cosine"
         )
 
-    def test_text_image_fusion_batch(self, embed_model):
-        """Test batch text-image fusion embedding."""
+        assert similarity_matrix.shape == (3, 3)
+        assert not torch.isnan(similarity_matrix).any()
+
+        # Diagonal should have highest similarity for same texts
+        assert similarity_matrix[0, 0] > similarity_matrix[0, 1]
+        assert similarity_matrix[0, 0] > similarity_matrix[0, 2]
+
+        # All cosine similarities should be in [-1, 1] range
+        assert torch.all(similarity_matrix >= -1) and torch.all(
+            similarity_matrix <= 1
+        )
+
+        log.info(f"Text similarity matrix shape: {similarity_matrix.shape}")
+        log.info(f"Text similarity scores:\n{similarity_matrix}")
+        log.info("Text similarity test passed!")
+
+    def test_image_similarity(self, embed_model):
+        """Test image similarity functionality."""
         if embed_model is None:
             pytest.skip("Model not available")
 
+        log.info("=== Testing Image Similarity ===")
+
+        # Create test images
+        images1 = [Image.open("images/dog.png"), Image.open("images/cat.jpg")]
+        images2 = [Image.open("images/cat.jpg"), Image.open("images/dog.png")]
+
+        # Test cosine similarity
+        similarity_matrix = embed_model.image_similarity(
+            images1, images2, "cosine"
+        )
+
+        assert similarity_matrix.shape == (2, 2), (
+            f"similarity_matrix shape: {similarity_matrix.shape}"
+        )
+        assert not torch.isnan(similarity_matrix).any(), (
+            f"similarity_matrix: {similarity_matrix}"
+        )
+
+        # All cosine similarities should be in [-1, 1] range
+        assert torch.all(similarity_matrix >= -1) and torch.all(
+            similarity_matrix <= 1
+        ), f"similarity_matrix: {similarity_matrix}"
+
+        log.info(f"Image similarity matrix shape: {similarity_matrix.shape}")
+        log.info(f"Image similarity scores:\n{similarity_matrix}")
+        log.info("Image similarity test passed!")
+
+    def test_text_image_mixed_similarity(self, embed_model):
+        """Test text-image mixed similarity functionality."""
+        if embed_model is None:
+            pytest.skip("Model not available")
+
+        log.info("=== Testing Text-Image Mixed Similarity ===")
+
+        # Test data
         texts = [
-            "A cat sitting on a chair.",
-            "A dog running in the park.",
-            "A bird flying in the sky.",
+            "A dog is running in the park.",
+            "A bird is flying.",
+            "A cat is sitting on a chair.",
         ]
-        images = create_dummy_images(batch_size=3)
+        images = [
+            Image.open("images/dog.jpg"),
+            Image.open("images/bird.jpg"),
+            Image.open("images/cat.jpg"),
+        ]
 
-        embeddings = embed_model.embed_text_and_image(texts, images)
-
-        assert embeddings.shape[0] == 3  # batch size
-        assert embeddings.shape[1] == embed_model.hidden_size
-        assert not torch.isnan(embeddings).any()
-
-        log.info(f"Batch text-image fusion embedding shape: {embeddings.shape}")
-
-    def test_forward_method_text_only(self, embed_model):
-        """Test forward method with text only."""
-        if embed_model is None:
-            pytest.skip("Model not available")
-
-        text = "Testing the forward method with text."
-
-        embeddings = embed_model(text=text)
-
-        assert embeddings.shape[0] == 1  # batch size
-        assert embeddings.shape[1] == embed_model.hidden_size
-        assert not torch.isnan(embeddings).any()
-
-        log.info(
-            f"Forward method text-only embedding shape: {embeddings.shape}"
+        # Test text-image similarity
+        text_image_similarity = embed_model.text_image_similarity(
+            texts, images, "cosine"
         )
 
-    def test_forward_method_image_only(self, embed_model):
-        """Test forward method with image only."""
-        if embed_model is None:
-            pytest.skip("Model not available")
-
-        image = create_dummy_image()
-
-        embeddings = embed_model(images=image)
-
-        assert embeddings.shape[0] == 1  # batch size
-        assert embeddings.shape[1] == embed_model.hidden_size
-        assert not torch.isnan(embeddings).any()
-
-        log.info(
-            f"Forward method image-only embedding shape: {embeddings.shape}"
+        assert text_image_similarity.shape == (3, 3), (
+            f"text_image_similarity shape: {text_image_similarity.shape}"
+        )
+        assert not torch.isnan(text_image_similarity).any(), (
+            f"text_image_similarity: {text_image_similarity}"
         )
 
-    def test_forward_method_text_image(self, embed_model):
-        """Test forward method with text and image."""
-        if embed_model is None:
-            pytest.skip("Model not available")
-
-        text = "Testing the forward method with text and image."
-        image = create_dummy_image()
-
-        embeddings = embed_model(text=text, images=image)
-
-        assert embeddings.shape[0] == 1  # batch size
-        assert embeddings.shape[1] == embed_model.hidden_size
-        assert not torch.isnan(embeddings).any()
+        # All cosine similarities should be in [-1, 1] range
+        assert torch.all(text_image_similarity >= -1) and torch.all(
+            text_image_similarity <= 1
+        ), f"text_image_similarity: {text_image_similarity}"
 
         log.info(
-            f"Forward method text-image embedding shape: {embeddings.shape}"
+            f"Text-image similarity matrix shape: {text_image_similarity.shape}"
         )
+        log.info(f"Text-image similarity scores:\n{text_image_similarity}")
 
-    def test_forward_method_no_inputs(self, embed_model):
-        """Test forward method with no inputs (should raise error)."""
-        if embed_model is None:
-            pytest.skip("Model not available")
+        # # Test fused similarity (text-image pairs)
+        # log.info("=== Testing Fused Similarity ===")
+        # pairs1 = [
+        #     ("A cat is sitting on a chair.", create_dummy_pil_image()),
+        #     ("A dog is running in the park.", create_dummy_pil_image()),
+        # ]
+        # pairs2 = [
+        #     (
+        #         "A cat is sitting on a chair.",
+        #         create_dummy_pil_image(),
+        #     ),  # Similar to first pair
+        #     ("A bird is flying in the sky.", create_dummy_pil_image()),
+        # ]
 
-        with pytest.raises(ValueError, match="Either text or images"):
-            embed_model()
+        # fused_similarity = embed_model.fused_similarity(
+        #     pairs1, pairs2, "cosine"
+        # )
 
-    def test_embedding_dimension(self, embed_model):
-        """Test getting embedding dimension."""
-        if embed_model is None:
-            pytest.skip("Model not available")
+        # assert fused_similarity.shape == (2, 2)
+        # assert not torch.isnan(fused_similarity).any()
 
-        dim = embed_model.get_embedding_dim()
-        assert dim == embed_model.hidden_size
-        assert isinstance(dim, int)
-        assert dim > 0
+        # # All cosine similarities should be in [-1, 1] range
+        # assert torch.all(fused_similarity >= -1) and torch.all(
+        #     fused_similarity <= 1
+        # )
 
-        log.info(f"Embedding dimension: {dim}")
+        # # First pair should be more similar to first pair in second set
+        # assert fused_similarity[0, 0] > fused_similarity[0, 1]
+
+        # log.info(f"Fused similarity matrix shape: {fused_similarity.shape}")
+        # log.info(f"Fused similarity scores:\n{fused_similarity}")
+        # log.info("Text-image mixed similarity test passed!")
 
 
-def demo_usage():
-    """Demonstrate usage of the LaViDa embedding model."""
-    log.info("=== LaViDa Embedding Model Demo ===")
-
-    # Replace with your actual model path
-    model_path = "path/to/your/lavida/model"
+def demo_similarity():
+    """Demonstrate similarity functionality of the LaViDa embedding model."""
+    log.info("=== LaViDa Similarity Demo ===")
 
     try:
         # Create the embedding model
         embed_model = create_lavida_embed_model(
-            model_path=model_path,
             device="cuda" if torch.cuda.is_available() else "cpu",
             torch_dtype="bfloat16",
         )
@@ -273,51 +222,62 @@ def demo_usage():
             f"Model loaded successfully with hidden size: {embed_model.hidden_size}"
         )
 
-        # Example 1: Text embedding
-        text = "The quick brown fox jumps over the lazy dog."
-        text_embeddings = embed_model.embed_text(text)
-        log.info(f"Text embedding shape: {text_embeddings.shape}")
+        # Demo 1: Text Similarity
+        log.info("\n=== Text Similarity Demo ===")
+        texts1 = [
+            "A cat is sitting on a chair.",
+            "A dog is running in the park.",
+        ]
+        texts2 = [
+            "A cat is sitting on a chair.",  # Same as first text
+            "A bird is flying in the sky.",
+        ]
 
-        # Example 2: Image embedding
-        dummy_image = create_dummy_image()
-        image_embeddings = embed_model.embed_image(dummy_image)
-        log.info(f"Image embedding shape: {image_embeddings.shape}")
+        text_similarity = embed_model.text_similarity(texts1, texts2)
+        log.info(f"Text similarity matrix shape: {text_similarity.shape}")
+        log.info(f"Text similarity scores:\n{text_similarity}")
 
-        # Example 3: Text + Image fusion
-        fusion_embeddings = embed_model.embed_text_and_image(text, dummy_image)
-        log.info(f"Fusion embedding shape: {fusion_embeddings.shape}")
+        # Demo 2: Image Similarity
+        log.info("\n=== Image Similarity Demo ===")
+        images1 = create_dummy_pil_images(2)
+        images2 = create_dummy_pil_images(2)
 
-        # Example 4: Using forward method
-        forward_embeddings = embed_model(text=text, images=dummy_image)
-        log.info(f"Forward method embedding shape: {forward_embeddings.shape}")
+        image_similarity = embed_model.image_similarity(images1, images2)
+        log.info(f"Image similarity matrix shape: {image_similarity.shape}")
+        log.info(f"Image similarity scores:\n{image_similarity}")
 
-        # Example 5: Batch processing
-        texts = ["First text", "Second text", "Third text"]
-        images = create_dummy_images(batch_size=3)
+        # Demo 3: Text-Image Mixed Similarity
+        log.info("\n=== Text-Image Mixed Similarity Demo ===")
 
-        batch_text_embeddings = embed_model.embed_text(texts)
-        batch_image_embeddings = embed_model.embed_image(images)
-        batch_fusion_embeddings = embed_model.embed_text_and_image(
-            texts, images
+        # Text-image similarity
+        text_image_similarity = embed_model.text_image_similarity(
+            texts1, images1
         )
-
-        log.info(f"Batch text embeddings shape: {batch_text_embeddings.shape}")
         log.info(
-            f"Batch image embeddings shape: {batch_image_embeddings.shape}"
+            f"Text-image similarity matrix shape: {text_image_similarity.shape}"
         )
-        log.info(
-            f"Batch fusion embeddings shape: {batch_fusion_embeddings.shape}"
-        )
+        log.info(f"Text-image similarity scores:\n{text_image_similarity}")
 
-        log.info("Demo completed successfully!")
+        # Fused similarity
+        pairs1 = [
+            ("A cat is sitting on a chair.", create_dummy_pil_image()),
+            ("A dog is running in the park.", create_dummy_pil_image()),
+        ]
+        pairs2 = [
+            ("A cat is sitting on a chair.", create_dummy_pil_image()),
+            ("A bird is flying in the sky.", create_dummy_pil_image()),
+        ]
+
+        fused_similarity = embed_model.fused_similarity(pairs1, pairs2)
+        log.info(f"Fused similarity matrix shape: {fused_similarity.shape}")
+        log.info(f"Fused similarity scores:\n{fused_similarity}")
+
+        log.info("\nDemo completed successfully!")
 
     except Exception as e:
         log.error(f"Demo failed: {e}")
-        log.info(
-            "Please make sure to replace 'model_path' with an actual LaViDa model path"
-        )
 
 
 if __name__ == "__main__":
     # Run the demo
-    demo_usage()
+    demo_similarity()

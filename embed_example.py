@@ -90,7 +90,7 @@ input_ids = (
 print(f"input_ids is \n {input_ids}")
 image_sizes = [image.size]
 # warmup
-_ = model.generate(
+hidden_state = model.generate(
     input_ids,
     images=image_tensor,
     image_sizes=image_sizes,
@@ -104,35 +104,4 @@ _ = model.generate(
     verbose=True,
 )
 
-t0 = time.time()
-cont, hist = model.generate(
-    input_ids,
-    images=image_tensor,
-    image_sizes=image_sizes,
-    do_sample=False,
-    temperature=0.1,
-    max_new_tokens=64,
-    block_length=64,
-    step_ratio=0.5,  # 32 steps
-    tokenizer=tokenizer,
-    prefix_lm=True,
-    verbose=True,
-    schedule="shift",
-)
-t1 = time.time()
-text_outputs = tokenizer.batch_decode(cont, skip_special_tokens=True)
-
-text_outputs = [text_output.lstrip("!") for text_output in text_outputs]
-print(text_outputs)
-
-print("Time taken for generation (s): ", t1 - t0)
-
-
-print("---------hist-------")
-for i, v in enumerate(hist):
-    print(
-        i,
-        tokenizer.batch_decode(v, skip_special_tokens=False)[0]
-        .lstrip("!")
-        .replace("<|mdm_mask|>", "*"),
-    )
+print(f"hidden_state[-1] shape is \n {hidden_state[-1].shape}")
