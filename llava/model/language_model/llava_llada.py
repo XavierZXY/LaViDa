@@ -397,6 +397,7 @@ class LlavaLladaForMaskedDiffusion(LLaDAModelLM, LlavaMetaForCausalLM):
         #     print("Seq len:",inputs_embeds.shape[1])
 
         # return super().generate(position_ids=position_ids, attention_mask=attention_mask, inputs_embeds=inputs_embeds, **kwargs)
+
         if embedd_flag:
             return llada_generate_embed(
                 self.get_model(),

@@ -157,7 +157,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--debug",
         type=bool,
-        default=False,
+        default=True,
         help="Use only the first 20 samples for quick debugging.",
     )
     args = parser.parse_args()
