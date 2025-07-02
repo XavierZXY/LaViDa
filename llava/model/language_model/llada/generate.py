@@ -392,6 +392,7 @@ def generate_embed(
     schedule_kwargs=None,
     draft_tokens=None,
     step_ratio=None,
+    only_text=False,
     **kwargs,
 ):
     """
@@ -406,6 +407,13 @@ def generate_embed(
         remasking: Remasking strategy. 'low_confidence' or 'random'.
         mask_id: The toke id of [MASK] is 126336.
     """
+    if only_text:
+        hidden_states = model(
+            None,
+            input_embeddings=inputs_embeds,
+            output_hidden_states=True,
+        ).hidden_states
+        return hidden_states[-1]
     steps = max_new_tokens
     gen_length = max_new_tokens
     assert position_ids is None
@@ -551,9 +559,11 @@ def generate_embed(
     # log.info(
     #     f"*********************** x ********************************: \n {x}"
     # )
+    # decode x
+    # log.info(f" x is {tokenizer.batch_decode(x)[0]}")
     inputs_embeds_final = model.transformer.wte(x)
     # log.info(f" inputs_embeds_final shape: {inputs_embeds_final.shape}")
-    return inputs_embeds_final
+    # return inputs_embeds_final
     hidden_states = model(
         None,
         input_embeddings=inputs_embeds_final,

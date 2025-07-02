@@ -95,9 +95,7 @@ class LaViDaEmbedModel(nn.Module):
         for t in text:
             # Use conversation template following embed_example.py
             conv = copy.deepcopy(conv_templates["llada"])
-            conv.append_message(
-                conv.roles[0], t + " conclusion this in one sentence."
-            )
+            conv.append_message(conv.roles[0], t + "\n repeat this sentence.")
             conv.append_message(conv.roles[1], None)
             prompt = conv.get_prompt()
 
@@ -119,6 +117,7 @@ class LaViDaEmbedModel(nn.Module):
             # log.info(f"input_ids: {input_ids}")
 
             # Use model.generate() following embed_example.py approach
+            only_text = True
             with torch.no_grad():
                 hidden_states = self.model.generate(
                     input_ids,
@@ -131,9 +130,13 @@ class LaViDaEmbedModel(nn.Module):
                     tokenizer=self.tokenizer,
                     prefix_lm=True,
                     verbose=False,
+                    only_text=only_text,
                 )
                 # Get the last hidden state
                 # last_hidden = hidden_states[-1]
+                if only_text:
+                    # log.info("only text")
+                    hidden_states = hidden_states[:, 44:-7]
 
             # log.info(f"last_hidden shape: {hidden_states.shape}")
 
@@ -244,7 +247,7 @@ class LaViDaEmbedModel(nn.Module):
             conv.append_message(conv.roles[1], None)
             prompt_question = conv.get_prompt()
 
-            log.info(f"Fused prompt: {prompt_question}")
+            # log.info(f"Fused prompt: {prompt_question}")
 
             # Tokenize
             input_ids = (
@@ -269,16 +272,17 @@ class LaViDaEmbedModel(nn.Module):
                     image_sizes=image_sizes,
                     do_sample=False,
                     temperature=0,
-                    max_new_tokens=64,
-                    block_length=64,
+                    max_new_tokens=16,
+                    block_length=16,
                     step_ratio=1.0,
                     tokenizer=self.tokenizer,
                     prefix_lm=True,
                     verbose=False,
                 )
-                last_hidden = hidden_states[:, 44:-7]
+                # last_hidden = hidden_states[:, 44:-7]
+                last_hidden = hidden_states
 
-            log.info(f"last_hidden shape: {last_hidden.shape}")
+            # log.info(f"last_hidden shape: {last_hidden.shape}")
 
             embedding = self._mean_pool(last_hidden)
             embeddings.append(embedding)
