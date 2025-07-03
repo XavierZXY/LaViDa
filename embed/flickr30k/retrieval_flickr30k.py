@@ -162,7 +162,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    args.debug = False
+    # args.debug = False
     args.batch_size = 1
     if args.debug:
         args.num_samples = 20
