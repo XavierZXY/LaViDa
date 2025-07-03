@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 import torch
 
-sys.path.append(str(Path(__file__).parent.parent))
+# sys.path.append(str(Path(__file__).parent.parent))
 from llava.model.builder import load_pretrained_model
 
 from embed.lavida_embed import LaViDaEmbedModel, create_lavida_embed_model
